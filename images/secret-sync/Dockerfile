@@ -1,4 +1,4 @@
-FROM python:3.8-alpine
+FROM python:3.9-alpine
 
 # VULN_SCAN_TIME=2021-11-14_01:05:25
 
