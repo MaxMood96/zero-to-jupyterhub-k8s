@@ -121,7 +121,7 @@ oauthenticator==14.2.0
     # via
     #   -r requirements.in
     #   jupyterhub-ltiauthenticator
-oauthlib==3.2.0
+oauthlib==3.2.1
     # via
     #   jupyterhub
     #   jupyterhub-ltiauthenticator
