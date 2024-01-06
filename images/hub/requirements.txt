@@ -145,9 +145,9 @@ pyasn1==0.4.8
     # via ldap3
 pycparser==2.21
     # via cffi
-pycryptodome==3.14.1
+pycryptodome==3.19.1
     # via jupyterhub-ltiauthenticator
-pycryptodomex==3.14.1
+pycryptodomex==3.19.1
     # via pyjwkest
 pycurl==7.45.1
     # via -r requirements.in
