@@ -4,7 +4,7 @@
 #
 #    ./dependencies freeze --upgrade
 #
-aiohttp==3.8.1
+aiohttp==3.9.4
     # via kubernetes-asyncio
 aiosignal==1.2.0
     # via aiohttp
@@ -36,7 +36,7 @@ charset-normalizer==2.0.12
     # via
     #   aiohttp
     #   requests
-cryptography==36.0.1
+cryptography==42.0.6
     # via
     #   josepy
     #   jwcrypto
