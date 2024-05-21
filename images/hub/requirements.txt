@@ -181,7 +181,7 @@ pyyaml==6.0
     # via
     #   jupyterhub-kubespawner
     #   kubernetes-asyncio
-requests==2.27.1
+requests==2.32.0
     # via
     #   jupyterhub
     #   mwoauth
