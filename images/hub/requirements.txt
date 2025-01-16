@@ -160,7 +160,7 @@ pyjwt==1.7.1
     #   mwoauth
 pymysql==1.0.2
     # via -r requirements.in
-pyopenssl==22.0.0
+pyopenssl==24.0.0
     # via
     #   certipy
     #   josepy
