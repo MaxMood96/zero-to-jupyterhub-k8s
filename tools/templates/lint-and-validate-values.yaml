@@ -8,6 +8,7 @@ imagePullSecret:
 imagePullSecrets: [a, b]
 
 hub:
+  revisionHistoryLimit: 1
   config:
     # We pin these to avoid generating changes which cause diffs
     ConfigurableHTTPProxy:
@@ -174,10 +175,21 @@ hub:
     minAvailable: null
   networkPolicy:
     enabled: true
+    egressAllowRules:
+      cloudMetadataServer: true
+      dnsPortsCloudMetadataServer: true
+      dnsPortsKubeSystemNamespace: true
+      dnsPortsPrivateIPs: true
+      nonPrivateIPs: true
+      privateIPs: false
     egress:
       - to:
-          - ipBlock:
-              cidr: 0.0.0.0/0
+          - podSelector:
+              matchLabels:
+                app.kubernetes.io/name: my-k8s-local-service
+        ports:
+          - protocol: TCP
+            port: 5978
     interNamespaceAccessLabels: ignore
     allowedIngressPorts: []
   allowNamedServers: true
@@ -189,13 +201,15 @@ hub:
       value: mock-taint-value-hub
       effect: NoSchedule
   serviceAccount: &serviceAccount
+    create: true
+    name: mock-serviceaccount-name
     annotations: *annotations
   extraPodSpec: &extraPodSpec
     hostNetwork: true
     dnsPolicy: ClusterFirstWithHostNet
 
 rbac:
-  enabled: true
+  create: true
 
 proxy:
   service:
@@ -210,6 +224,7 @@ proxy:
       http:
       https:
   chp:
+    revisionHistoryLimit: 1
     extraCommandLineFlags:
       - "--auto-rewrite"
       - "--mock-flag {{ .Values.proxy.chp.resources.requests.memory }}"
@@ -233,6 +248,11 @@ proxy:
         effect: NoSchedule
     networkPolicy:
       enabled: true
+      egressAllowRules:
+        cloudMetadataServer: false
+        dnsPortsPrivateIPs: false
+        nonPrivateIPs: false
+        privateIPs: true
       egress:
         - to:
             - ipBlock:
@@ -245,6 +265,7 @@ proxy:
       minAvailable: 1
     extraPodSpec: *extraPodSpec
   traefik:
+    revisionHistoryLimit: 1
     labels: *labels
     resources: *resources
     extraEnv: *extraEnv
@@ -257,6 +278,11 @@ proxy:
         effect: NoSchedule
     networkPolicy:
       enabled: true
+      egressAllowRules:
+        cloudMetadataServer: false
+        dnsPortsPrivateIPs: false
+        nonPrivateIPs: true
+        privateIPs: true
       egress:
         - to:
             - ipBlock:
@@ -318,6 +344,26 @@ singleuser:
         mock description 2
       kubespawner_override:
         image: XYZ:XYZ
+    - display_name: "mock display name 3"
+      description: |
+        mock description 3
+      profile_options:
+        image:
+          display_name: Image
+          choices:
+            image1:
+              display_name: "image 1"
+              kubespawner_override:
+                image: XXX:XXX
+            image2:
+              display_name: "image 2"
+              kubespawner_override:
+                image: YYY:YYY
+          unlisted_choice:
+            enabled: true
+            display_name: "image ZZZ tag"
+            kubespawner_override:
+              image: "ZZZ:{value}"
   nodeSelector:
     mock-node-selector: mock
   extraTolerations:
@@ -377,6 +423,11 @@ singleuser:
     ip: 169.254.169.254
   networkPolicy:
     enabled: true
+    egressAllowRules:
+      cloudMetadataServer: false
+      dnsPortsPrivateIPs: true
+      nonPrivateIPs: false
+      privateIPs: false
     egress:
       - to:
           - ipBlock:
@@ -397,6 +448,7 @@ singleuser:
     - name: mock-extra-container-name
       image: mock-extra-container-image
       imagePullPolicy: IfNotPresent
+  allowPrivilegeEscalation: false
   uid: 1000
   fsGid: 100
   serviceAccountName:
@@ -433,6 +485,7 @@ singleuser:
 scheduling:
   userScheduler:
     enabled: true
+    revisionHistoryLimit: 1
     replicas: 1
     logLevel: 10
     image: *image
@@ -446,7 +499,7 @@ scheduling:
     plugins:
       score:
         disabled:
-          - name: SelectorSpread
+          - name: PodTopologySpread
         enabled:
           - name: NodePreferAvoidPods
             weight: 161051
@@ -465,8 +518,17 @@ scheduling:
     enabled: true
   userPlaceholder:
     enabled: true
+    revisionHistoryLimit: 1
     replicas: 1
     resources: *resources
+    extraPodSpec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              foo: bar
   corePods:
     tolerations:
       - key: mock-taint-key-corePods
@@ -485,6 +547,7 @@ scheduling:
       matchNodePurpose: require
 
 prePuller:
+  revisionHistoryLimit: 1
   extraTolerations:
     - key: mock-taint-key-prePuller
       operator: Equal
@@ -500,8 +563,10 @@ prePuller:
         value: mock-taint-value-hook
         effect: NoSchedule
     serviceAccount: *serviceAccount
+    serviceAccountImagePuller: *serviceAccount
   continuous:
     enabled: true
+    serviceAccount: *serviceAccount
   extraImages:
     mockImage1:
       name: mock-user/mock-image1
@@ -509,6 +574,7 @@ prePuller:
     mockImage2:
       name: mock-user/mock-image2
       tag: mock-tag
+      pullPolicy: Always
 
 ingress:
   enabled: true
@@ -519,6 +585,21 @@ ingress:
     - mocked2.domain.name
   pathSuffix: dummy-pathSuffix
   pathType: ImplementationSpecific
+  extraPaths:
+    - pathType: Prefix
+      path: "/foo"
+      backend:
+        service:
+          name: foo
+          port:
+            number: 80
+    - pathType: Prefix
+      path: "/bar"
+      backend:
+        service:
+          name: bar
+          port:
+            name: barPort
   tls:
     - secretName: jupyterhub-tls
       hosts:

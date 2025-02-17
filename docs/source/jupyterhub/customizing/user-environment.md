@@ -23,14 +23,15 @@ To get started customizing the user environment, see the topics below.
 
 ## Choose and use an existing Docker image
 
+This chart uses a minimal default singleuser image intended for quick tests.
+You will need to choose a different image or build your own for real use.
+
 Project Jupyter maintains the [jupyter/docker-stacks repository](https://github.com/jupyter/docker-stacks/), which contains ready to use
 Docker images. Each image includes a set of commonly used science and data
 science libraries and tools. They also provide excellent documentation on [how
 to choose a suitable image](https://jupyter-docker-stacks.readthedocs.io/en/latest/using/selecting.html).
 
-If you wish to use another image from jupyter/docker-stacks than the
-[base-notebook](https://jupyter-docker-stacks.readthedocs.io/en/latest/using/selecting.html#jupyter-base-notebook)
-used by default, such as the [datascience-notebook](https://jupyter-docker-stacks.readthedocs.io/en/latest/using/selecting.html#jupyter-datascience-notebook)
+For example, to use the [datascience-notebook](https://jupyter-docker-stacks.readthedocs.io/en/latest/using/selecting.html#jupyter-datascience-notebook)
 image containing useful tools and libraries for data science, complete these steps:
 
 1. Modify your `config.yaml` file to specify the image. For example:
@@ -44,6 +45,9 @@ image containing useful tools and libraries for data science, complete these ste
        # https://github.com/jupyter/docker-stacks/tree/HEAD/datascience-notebook/Dockerfile
        name: jupyter/datascience-notebook
        tag: latest
+     # `cmd: null` allows the custom CMD of the Jupyter docker-stacks to be used
+     # which performs further customization on startup.
+     cmd: null
    ```
 
    ```{note}
@@ -244,10 +248,9 @@ FROM jupyter/minimal-notebook:latest
 RUN pip install --no-cache-dir astropy
 
 # set the default command of the image,
-# if the parent image will not launch a jupyterhub singleuser server.
-# The JupyterHub "Docker stacks" do not need to be overridden.
-# Set either here or in `singleuser.cmd` in your values.yaml
-# CMD ["jupyterhub-singleuser"]
+# if you want to launch more complex startup than the default `juptyerhub-singleuser`.
+# To launch an image's custom CMD instead of the default `jupyterhub-singleuser`
+# set `singleuser.cmd: null` in your config.yaml.
 ```
 
 ```{note}
@@ -432,10 +435,10 @@ of configuration options that override your JupyterHub's default configuration
 Docker images, to select the hardware on which they want their jobs to run,
 or to configure default interfaces such as Jupyter Lab vs. RStudio.
 
-Each configuration is a set of options for [Kubespawner](https://github.com/jupyterhub/kubespawner),
+Each configuration is a set of options for [KubeSpawner](https://github.com/jupyterhub/kubespawner),
 which defines how Kubernetes should launch a new user server pod. Any
 configuration options passed to the `profileList` configuration will
-overwrite the defaults in Kubespawner (or any configuration you've
+overwrite the defaults in KubeSpawner (or any configuration you've
 added elsewhere in your helm chart).
 
 Profiles are stored under `singleuser.profileList`, and are defined as
@@ -491,7 +494,7 @@ singleuser:
                   gitpuller https://github.com/data-8/materials-fa17 master materials-fa;
 ```
 
-This allows users to select from three profiles, each with their own
+This allows users to select from four profiles, each with their own
 environment (defined by each Docker image in the configuration above).
 
 The "Learning Data Science" environment in the above example overrides the postStart lifecycle hook. Note that when
@@ -500,6 +503,12 @@ For instance, when overriding the lifecycle
 hooks in `kubespawner_override`, the configuration is for `lifecycle_hooks` (snake_case) rather than `lifecycleHooks` (camelCase) which is
 how it is used directly under the `singleuser` configuration section.
 [A further explanation for this can be found in this github issue.](https://github.com/jupyterhub/zero-to-jupyterhub-k8s/issues/1242#issuecomment-484895216)
+
+### User-dependent profile options
+
+It is also possible to configure the profile choices presented to the user depending on the user.
+You can do this by defining a custom **pre-spawn hook** that populates the profile list based on user identity.
+See [this discourse post](https://discourse.jupyter.org/t/tailoring-spawn-options-and-server-configuration-to-certain-users/8449) for some examples of how this works.
 
 ```{note}
 You can also **control the HTML used for the profile selection page** by
@@ -523,23 +532,31 @@ this is best done in the ENTRYPOINT of the image,
 and not in the CMD, so that overriding the command does not skip your preparation.
 ```
 
-By default, zero-to-jupyterhub will launch the default CMD that is specified in your chosen image,
-respecting any startup customization that image may have.
-If the image doesn't launch `jupyterhub-singleuser` by default,
-you will additionally need to specify `singleuser.cmd`
-in your `values.yaml` as the command to launch,
-so that it ultimately launches `jupyterhub-singleuser`.
-The simplest version:
+By default, zero-to-jupyterhub will launch the command `jupyterhub-singleuser`.
+If you have an image (such as `jupyter/scipy-notebook` and other Jupyter Docker stacks)
+that defines a CMD with startup customization and ultimately launches `jupyterhub-singleuser`,
+you can chose to launch the image's default CMD instead by setting:
 
 ```yaml
 singleuser:
-  cmd: jupyterhub-singleuser
+  cmd: null
 ```
 
-```{versionchanged} 2.0
-Prior to 2.0, the default behavior of zero-to-jupyterhub was to launch `jupyterhub-singleuser` explicitly,
-ignoring what was in the image.
-The default command is now whatever the image runs by default.
+Alternately, you can specify an explicit custom command as a string or list of strings:
+
+```yaml
+singleuser:
+  cmd:
+    - /usr/local/bin/custom-command
+    - "--flag"
+    - "--other-flag"
+```
+
+```{note}
+Docker has `ENTRYPOINT` and `CMD`,
+which k8s calls `command` and `args`.
+zero-to-jupyterhub always respects the ENTRYPOINT of the image,
+and setting `singleuser.cmd` only overrides the CMD.
 ```
 
 ## Disable specific JupyterLab extensions

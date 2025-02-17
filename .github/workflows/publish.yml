@@ -1,5 +1,5 @@
 # This is a GitHub workflow defining a set of jobs with a set of steps.
-# ref: https://docs.github.com/en/actions/learn-github-actions/workflow-syntax-for-github-actions
+# ref: https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions
 #
 name: Publish
 
@@ -20,6 +20,8 @@ on:
     branches-ignore:
       - "dependabot/**"
       - "pre-commit-ci-update-config"
+      - "update-*"
+      - "vuln-scan-*"
     tags:
       - "**"
 
@@ -29,53 +31,48 @@ jobs:
   # JupyterHub organization Helm chart repository.
   #
   # ref: https://github.com/jupyterhub/helm-chart
-  # ref: https://hub.docker.com/orgs/jupyterhub
+  # ref: https://quay.io/organization/jupyterhub
 
   publish:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           # chartpress requires git history to set chart version and image tags
           # correctly
           fetch-depth: 0
 
-      - uses: actions/setup-python@v3
+      - uses: actions/setup-python@v5
         with:
-          python-version: "3.8"
+          python-version: "3.11"
 
-      - name: store whether we are publishing the chart
+      - name: Decide to publish or not
         id: publishing
         shell: python
-        env:
-          REPO: ${{ github.repository }}
-          EVENT: ${{ github.event_name }}
-          REF: ${{ github.event.ref }}
         run: |
           import os
-          repo = os.environ["REPO"]
-          event = os.environ["EVENT"]
-          ref = os.environ["REF"]
+          repo = "${{ github.repository }}"
+          event = "${{ github.event_name }}"
+          ref = "${{ github.event.ref }}"
           publishing = ""
           if (
               repo == "jupyterhub/zero-to-jupyterhub-k8s"
               and event == "push"
               and (
-                  # any tag
                   ref.startswith("refs/tags/")
-                  # or default branch
                   or ref == "refs/heads/main"
               )
           ):
               publishing = "true"
               print("Publishing chart")
-          print(f"::set-output name=publishing::{publishing}")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"publishing={publishing}\n")
 
       - name: Set up QEMU (for docker buildx)
-        uses: docker/setup-qemu-action@27d0a4f181a40b142cce983c5393082c365d1480 # dependabot updates to latest release
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx (for chartpress multi-arch builds)
-        uses: docker/setup-buildx-action@94ab11c41e45d028884a99163086648e898eed25 # dependabot updates to latest release
+        uses: docker/setup-buildx-action@v3
 
       - name: Install chart publishing dependencies (chartpress, helm)
         run: |
@@ -111,7 +108,8 @@ jobs:
         #    https://github.com/jupyterhub/zero-to-jupyterhub-k8s/settings/secrets/actions
         if: steps.publishing.outputs.publishing
         run: |
-          docker login -u "${{ secrets.DOCKER_USERNAME }}" -p "${{ secrets.DOCKER_PASSWORD }}"
+          docker login -u "${{ secrets.QUAY_USERNAME }}" -p "${{ secrets.QUAY_PASSWORD }}" quay.io
+          docker login -u "${{ secrets.DOCKER_USERNAME }}" -p "${{ secrets.DOCKER_PASSWORD }}" docker.io
 
       - name: Configure a git user
         # Having a user.email and user.name configured with git is required to
@@ -124,7 +122,7 @@ jobs:
 
       - name: build chart with chartpress
         run: |
-          # Create values.schema.yaml from schema.yaml.
+          # Create values.schema.json from values.schema.yaml.
           ./tools/generate-json-schema.py
 
           # Append annotations to Chart.yaml with current images so that
@@ -146,7 +144,7 @@ jobs:
         run: helm package jupyterhub
 
       # ref: https://github.com/actions/upload-artifact
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v4
         if: steps.publishing.outputs.publishing == ''
         with:
           name: jupyterhub-${{ github.sha }}

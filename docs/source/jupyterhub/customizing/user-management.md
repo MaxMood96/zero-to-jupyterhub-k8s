@@ -84,7 +84,7 @@ are being used as expected.
 ## Admin Users
 
 JupyterHub has the concept of
-[admin users](https://jupyterhub.readthedocs.io/en/latest/getting-started/authenticators-users-basics.html#configure-admins-admin-users)
+[admin users](https://jupyterhub.readthedocs.io/en/stable/tutorial/getting-started/authenticators-users-basics.html#configure-admins-admin-users)
 who have special rights. They can start / stop other user's servers, and
 optionally access user's notebooks. They will see a new **Admin** button in
 their Control Panel which will take them to an **Admin Panel** where they can
@@ -114,4 +114,4 @@ hub:
 ## Authenticating Users
 
 For information on authenticating users in JupyterHub, see
-[the Authentication guide](../../administrator/authentication).
+[the Authentication guide](../../administrator/authentication.md).

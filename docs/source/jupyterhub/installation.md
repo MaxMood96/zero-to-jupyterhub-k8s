@@ -2,9 +2,9 @@
 
 # Installing JupyterHub
 
-With a {doc}`Kubernetes cluster </kubernetes/setup-kubernetes>` cluster
-available and {doc}`Helm </kubernetes/setup-helm>` installed, we can install
-JupyterHub in the Kubernetes cluster using the JupyterHub Helm chart.
+With a {doc}`Kubernetes cluster </kubernetes/setup-kubernetes>` available
+and {doc}`Helm </kubernetes/setup-helm>` installed, we can install JupyterHub
+in the Kubernetes cluster using the JupyterHub Helm chart.
 
 ## Initialize a Helm chart configuration file
 
@@ -35,7 +35,7 @@ just create a `config.yaml` file with some helpful comments.
 # Introduction to YAML:     https://www.youtube.com/watch?v=cdLNKUoMc6c
 # Chart config reference:   https://zero-to-jupyterhub.readthedocs.io/en/stable/resources/reference.html
 # Chart default values:     https://github.com/jupyterhub/zero-to-jupyterhub-k8s/blob/HEAD/jupyterhub/values.yaml
-# Available chart versions: https://jupyterhub.github.io/helm-chart/
+# Available chart versions: https://hub.jupyter.org/helm-chart/
 #
 ```
 
@@ -44,11 +44,11 @@ can try with `nano config.yaml`.
 
 ## Install JupyterHub
 
-1. Make Helm aware of the [JupyterHub Helm chart repository](https://jupyterhub.github.io/helm-chart/) so you can install the
+1. Make Helm aware of the [JupyterHub Helm chart repository](https://hub.jupyter.org/helm-chart/) so you can install the
    JupyterHub chart from it without having to use a long URL name.
 
    ```
-   helm repo add jupyterhub https://jupyterhub.github.io/helm-chart/
+   helm repo add jupyterhub https://hub.jupyter.org/helm-chart/
    helm repo update
    ```
 
@@ -101,13 +101,13 @@ can try with `nano config.yaml`.
      Helm chart is paired with a specific version of JupyterHub. E.g.,
      `0.11.1` of the Helm chart runs JupyterHub `1.3.0`.
      For a list of which JupyterHub version is installed in each version
-     of the JupyterHub Helm Chart, see the [Helm Chart repository](https://jupyterhub.github.io/helm-chart/).
+     of the JupyterHub Helm Chart, see the [Helm Chart repository](https://hub.jupyter.org/helm-chart/).
 
 3. While Step 2 is running, you can see the pods being created by entering in
    a different terminal:
 
    ```
-   kubectl get pod --namespace jhub
+   kubectl get pod --namespace <k8s-namespace>
    ```
 
    To remain sane we recommend that you enable autocompletion for kubectl
@@ -128,26 +128,23 @@ can try with `nano config.yaml`.
    proxy-7cb9bc4cc-9bdlp   1/1       Running   0          37s
    ```
 
-5. Find the IP we can use to access the JupyterHub. Run the following command
-   until the `EXTERNAL-IP` of the `proxy-public` [service](https://kubernetes.io/docs/concepts/services-networking/service/) is
-   available like in the example output.
+5. Find the IP we can use to access the JupyterHub. Run the following
+   command until the `EXTERNAL-IP` of the `proxy-public` [service](https://kubernetes.io/docs/concepts/services-networking/service/)
+   is available like in the example output.
 
    ```
-   kubectl get service --namespace <k8s-namespace>
+   kubectl --namespace <k8s-namespace> get service proxy-public
    ```
 
    ```
-   NAME           TYPE           CLUSTER-IP      EXTERNAL-IP     PORT(S)        AGE
-   hub            ClusterIP      10.51.243.14    <none>          8081/TCP       1m
-   proxy-api      ClusterIP      10.51.247.198   <none>          8001/TCP       1m
+   NAME           TYPE           CLUSTER-IP     EXTERNAL-IP     PORT(S)        AGE
    proxy-public   LoadBalancer   10.51.248.230   104.196.41.97   80:31916/TCP   1m
    ```
 
-   If the IP for `proxy-public` is too long to fit into the window, you
-   can find the longer version by calling:
+   Or, use the short form:
 
    ```
-   kubectl describe service proxy-public --namespace <k8s-namespace>
+   kubectl --namespace <k8s-namespace> get service proxy-public --output jsonpath='{.status.loadBalancer.ingress[].ip}'
    ```
 
 6. To use JupyterHub, enter the external IP for the `proxy-public` service in

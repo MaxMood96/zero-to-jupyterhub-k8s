@@ -8,6 +8,9 @@ metadata:
   labels:
     {{- include "jupyterhub.labels" . | nindent 4 }}
 spec:
+  {{- if not (typeIs "<nil>" .Values.proxy.traefik.revisionHistoryLimit) }}
+  revisionHistoryLimit: {{ .Values.proxy.traefik.revisionHistoryLimit }}
+  {{- end }}
   replicas: 1
   selector:
     matchLabels:
@@ -15,7 +18,7 @@ spec:
   template:
     metadata:
       labels:
-        {{- include "jupyterhub.matchLabels" . | nindent 8 }}
+        {{- include "jupyterhub.matchLabelsLegacyAndModern" . | nindent 8 }}
         hub.jupyter.org/network-access-proxy-http: "true"
         {{- with .Values.proxy.traefik.labels }}
         {{- . | toYaml | nindent 8 }}
@@ -27,8 +30,8 @@ spec:
         # entrypoint of all network traffic.
         checksum/static-config: {{ include "jupyterhub.traefik.yaml" . | fromYaml | merge .Values.proxy.traefik.extraStaticConfig | toYaml | sha256sum }}
     spec:
-      {{- if .Values.rbac.enabled }}
-      serviceAccountName: {{ include "jupyterhub.autohttps.fullname" . }}
+      {{- with include "jupyterhub.autohttps-serviceaccount.fullname" . }}
+      serviceAccountName: {{ . }}
       {{- end }}
       {{- if .Values.scheduling.podPriority.enabled }}
       priorityClassName: {{ include "jupyterhub.priority.fullname" . }}
@@ -79,6 +82,9 @@ spec:
           securityContext:
             {{- . | toYaml | nindent 12 }}
           {{- end }}
+        {{- with .Values.proxy.traefik.extraInitContainers }}
+        {{- . | toYaml | nindent 8 }}
+        {{- end }}
       containers:
         - name: traefik
           image: "{{ .Values.proxy.traefik.image.name }}:{{ .Values.proxy.traefik.image.tag }}"
@@ -118,12 +124,16 @@ spec:
           {{- with .Values.proxy.secretSync.image.pullPolicy }}
           imagePullPolicy: {{ . }}
           {{- end }}
+          {{- with .Values.proxy.secretSync.resources }}
+          resources:
+            {{- . | toYaml | nindent 12 }}
+          {{- end }}
           args:
             - watch-save
-            - --label=app={{ include "jupyterhub.appLabel" . }}
-            - --label=release={{ .Release.Name }}
-            - --label=chart={{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
-            - --label=heritage=secret-sync
+            - --label=app.kubernetes.io/name={{ include "jupyterhub.appLabel" . }}
+            - --label=app.kubernetes.io/instance={{ .Release.Name }}
+            - --label=helm.sh/chart={{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+            - --label=app.kubernetes.io/managed-by=secret-sync
             - {{ include "jupyterhub.proxy-public-tls.fullname" . }}
             - acme.json
             - /etc/acme/acme.json

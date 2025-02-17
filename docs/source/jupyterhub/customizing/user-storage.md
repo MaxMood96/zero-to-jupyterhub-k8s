@@ -149,7 +149,7 @@ Replace `<your-cluster-zone>` with the Zone in which you created your cluster (y
 this with `gcloud container clusters list`).
 
 Next, create this object by running `kubectl apply -f storageclass.yaml`
-from the commandline. The [Kubernetes Docs](https://kubernetes.io/docs/concepts/storage/storage-classes#the-storageclass-resource)
+from the commandline. The [Kubernetes Docs](https://kubernetes.io/docs/concepts/storage/storage-classes/)
 have more information on what the various fields mean. The most important field is `parameters.type`,
 which specifies the type of storage you wish to use. The two options are:
 
@@ -183,9 +183,12 @@ singleuser:
 This will request a `2Gi` volume per user. The default requests a `10Gi`
 volume per user.
 
-We recommend you use the [IEC Prefixes](https://physics.nist.gov/cuu/Units/binary.html)
-(Ki, Mi, Gi, etc) for specifying how much storage you want. `2Gi` (IEC Prefix) is
-`(2 * 1024 * 1024 * 1024)` bytes, while `2G` (SI Prefix) is `(2 * 1000 * 1000 * 1000)` bytes.
+We recommend you use the [IEC binary prefixes] (Ki, Mi, Gi, etc) for specifying
+how much storage you want. `2Gi` (IEC binary prefix) is `(2 * 1024 * 1024 *
+1024)` bytes, while `2G` (SI decimal prefix) is `(2 * 1000 * 1000 * 1000)`
+bytes.
+
+[iec binary prefixes]: https://en.wikipedia.org/wiki/Binary_prefix
 
 ## Turn off per-user persistent storage
 

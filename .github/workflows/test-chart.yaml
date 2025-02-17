@@ -1,5 +1,5 @@
 # This is a GitHub workflow defining a set of jobs with a set of steps.
-# ref: https://docs.github.com/en/actions/learn-github-actions/workflow-syntax-for-github-actions
+# ref: https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions
 #
 name: Test chart
 
@@ -22,28 +22,32 @@ on:
     branches-ignore:
       - "dependabot/**"
       - "pre-commit-ci-update-config"
+      - "update-*"
+      - "vuln-scan-*"
   workflow_dispatch:
 
 jobs:
   lint_shell_scripts:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v3
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
       - name: Install dependencies
         run: pip install pre-commit
 
-      - name: Run shellcheck linter
-        run: pre-commit run --all --config .pre-commit-config-shellcheck.yaml
+      - name: Run all stages including shellcheck (disabled by default)
+        run: pre-commit run --all --hook-stage manual
 
   lint_and_validate_rendered_templates:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v3
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
-          python-version: "3.8"
+          python-version: "3.11"
 
       - name: Install dependencies
         run: pip install chartpress yamllint
@@ -56,7 +60,7 @@ jobs:
         continue-on-error: true
 
   lint_and_validate_templates_with_schema:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
 
     strategy:
       fail-fast: false
@@ -73,10 +77,10 @@ jobs:
           - helm-version: v3.5.0 # minimal required version
 
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v3
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
-          python-version: "3.8"
+          python-version: "3.11"
 
       - name: Install dependencies
         run: |
@@ -110,7 +114,6 @@ jobs:
         continue-on-error: true
 
   test:
-    runs-on: ubuntu-20.04
     timeout-minutes: 20
 
     strategy:
@@ -123,48 +126,45 @@ jobs:
         #
         # k3s-version: https://github.com/rancher/k3s/tags
         # k3s-channel: https://update.k3s.io/v1-release/channels
+        #
         include:
-          - k3s-channel: v1.23
+          - k3s-channel: latest
             test: install
-          - k3s-channel: v1.22
-            test: install
-          - k3s-channel: v1.21
-            test: install
-          - k3s-channel: v1.20
-            test: install
-          - k3s-channel: v1.19
-            test: install
-          - k3s-channel: v1.18 # also test prePuller.hook
+            # Also test arm64
+            os: ubuntu-24.04-arm
+          - k3s-channel: stable # also test hub-slim, and prePuller.hook
             test: install
             local-chart-extra-args: >-
+              --set hub.image.name=quay.io/jupyterhub/k8s-hub-slim
               --set prePuller.hook.enabled=true
               --set prePuller.hook.pullOnlyOnChanges=true
-          - k3s-channel: v1.17 # also test hub.existingSecret
+            os: ubuntu-24.04
+          - k3s-channel: v1.31 # also test hub.existingSecret and subdomain_host
             test: install
             local-chart-extra-args: >-
               --set hub.existingSecret=test-hub-existing-secret
               --set proxy.secretToken=aaaa1111
               --set hub.cookieSecret=bbbb2222
               --set hub.config.CryptKeeper.keys[0]=cccc3333
-            # ingress.ingressClassName requires k8s 1.18 and above, don't
-            # validate setting it against the k8s api-server on k8s 1.17.
-            helm-template-validate-extra-args: >-
-              --set ingress.ingressClassName=""
+              --set hub.config.JupyterHub.subdomain_host=jupyterhub.example.org
             create-k8s-test-resources: true
+            os: ubuntu-24.04
 
-          # We run two upgrade tests where we first install an already released
-          # Helm chart version and then upgrades to the version we are now
-          # testing. We test upgrading from the latest stable version (like
-          # 1.2.3), and one from the latest dev version (like
-          # 1.2.3-n012.h1234abc).
+          # We run three upgrade tests where we first install an already released
+          # Helm chart version and then upgrade to the version we are now
+          # testing:
+          # - latest stable version (like 1.2.3)
+          # - latest dev version (like 1.2.3-0.dev.git.5810.hf475e7a4),
+          # - and an old version that requires a JupyterHub DB upgrade
           #
           # It can be very useful to see the "Helm diff" step's output from the
           # latest dev version.
           #
-          # The upgrade-from input should match the version information from
-          # https://jupyterhub.github.io/helm-chart/info.json
+          # The upgrade-from input should be a chart version, or match the version
+          # information from
+          # https://hub.jupyter.org/helm-chart/info.json
           #
-          - k3s-channel: v1.19
+          - k3s-channel: v1.30
             test: upgrade
             upgrade-from: stable
             upgrade-from-extra-args: >-
@@ -177,7 +177,8 @@ jobs:
               --set hub.db.type=sqlite-pvc
               --set singleuser.storage.type=dynamic
             create-k8s-test-resources: true
-          - k3s-channel: v1.19
+            os: ubuntu-24.04
+          - k3s-channel: v1.29
             test: upgrade
             upgrade-from: dev
             upgrade-from-extra-args: >-
@@ -187,9 +188,41 @@ jobs:
             local-chart-extra-args: >-
               --set hub.db.type=sqlite-pvc
               --set singleuser.storage.type=dynamic
+            os: ubuntu-24.04
+          - k3s-channel: v1.28
+            test: upgrade
+            # We're testing hub.db.upgrade with PostgreSQL so this version must be old
+            # enough to require a DB upgrade
+            upgrade-from: 2.0.0
+            upgrade-from-extra-args: >-
+              --set proxy.secretToken=aaaa1111
+              --set hub.cookieSecret=bbbb2222
+              --set hub.config.CryptKeeper.keys[0]=cccc3333
+              --set hub.db.type=postgres
+              --set hub.db.url=postgresql+psycopg2://postgres:postgres@postgresql:5432/jupyterhub
+              --set singleuser.storage.type=dynamic
+            local-chart-extra-args: >-
+              --set hub.db.type=postgres
+              --set hub.db.url=postgresql+psycopg2://postgres:postgres@postgresql:5432/jupyterhub
+              --set singleuser.storage.type=dynamic
+              --set hub.db.upgrade=true
+            create-k8s-test-resources: true
+            # https://artifacthub.io/packages/helm/bitnami/postgresql
+            setup-postgresql-args: >-
+              --version=16.0.5
+              --set auth.enablePostgresUser=true
+              --set auth.postgresPassword=postgres
+              --set auth.database=jupyterhub
+              --set audit.logHostname=true
+              --set audit.logConnections=true
+              --set audit.logDisconnections=true
+              --set audit.clientMinMessages=debug
+            os: ubuntu-24.04
+
+    runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           # chartpress requires git history to set chart version and image tags
           # correctly
@@ -199,34 +232,33 @@ jobs:
       # kubectl and helm
       #
       # ref: https://github.com/jupyterhub/action-k3s-helm/
-      - uses: jupyterhub/action-k3s-helm@v1
+      - uses: jupyterhub/action-k3s-helm@v4
         with:
           k3s-channel: ${{ matrix.k3s-channel }}
           metrics-enabled: false
           traefik-enabled: false
           docker-enabled: true
 
-      # NOTE: actions/setup-python@v3 make use of a cache within the GitHub base
-      #       environment and setup in a fraction of a second.
-      - uses: actions/setup-python@v3
+      - uses: actions/setup-python@v5
         with:
-          python-version: "3.8"
+          python-version: "3.11"
 
       # Install a local ACME server to fill the role of Let's Encrypt (LE). We
       # do this as the HTTP challenge sent out by an ACME server must be able to
       # reach the ACME client in our autohttps pod.
       - name: Install local ACME server
         run: |
-          helm install pebble --repo https://jupyterhub.github.io/helm-chart/ pebble --values dev-config-pebble.yaml
+          helm install pebble --repo https://hub.jupyter.org/helm-chart/ pebble --values dev-config-pebble.yaml
 
       # Build our images if needed and update values.yaml with the tags
       - name: Install and run chartpress
         run: |
           pip3 install -r dev-requirements.txt
           chartpress
+        env:
+          DOCKER_BUILDKIT: "1"
 
-      # Generate values.schema.json from schema.yaml
-      - name: Generate values.schema.json from schema.yaml
+      - name: Generate values.schema.json from values.schema.yaml
         run: |
           tools/generate-json-schema.py
 
@@ -240,27 +272,40 @@ jobs:
       # jupyterhub and the autohttps pod is about to start, so for CI
       # performance we delayed this until now and did other things in between.
       - name: Await local ACME server
-        uses: jupyterhub/action-k8s-await-workloads@v1
+        uses: jupyterhub/action-k8s-await-workloads@v3
         with:
           timeout: 150
           max-restarts: 1
 
+      - name: "(Upgrade) Install PostgreSQL server chart"
+        if: matrix.setup-postgresql-args
+        run: |
+          . ./ci/common
+          helm install postgresql postgresql --repo=https://charts.bitnami.com/bitnami ${{ matrix.setup-postgresql-args }}
+          await_kubectl_rollout statefulset/postgresql
+
       - name: "(Upgrade) Install ${{ matrix.upgrade-from }} chart"
         if: matrix.test == 'upgrade'
         run: |
-          . ./ci/common
-          UPGRADE_FROM_VERSION=$(curl -sS https://jupyterhub.github.io/helm-chart/info.json | jq -er '.jupyterhub.${{ matrix.upgrade-from }}')
+          # NOTE: We change the directory so jupyterhub the chart name won't be
+          #       misunderstood as the local folder name.
+          #
+          #       https://github.com/helm/helm/issues/9244
+          cd ci
+
+          if [ ${{ matrix.upgrade-from }} = stable ]; then
+            UPGRADE_FROM_VERSION=$(helm show chart --repo=https://hub.jupyter.org/helm-chart/ jupyterhub | yq e '.version' -)
+          elif [ ${{ matrix.upgrade-from }} = dev ]; then
+            UPGRADE_FROM_VERSION=$(helm show chart --devel --repo=https://hub.jupyter.org/helm-chart/ jupyterhub | yq e '.version' -)
+          else
+            UPGRADE_FROM_VERSION=${{ matrix.upgrade-from }}
+          fi
           echo "UPGRADE_FROM_VERSION=$UPGRADE_FROM_VERSION" >> $GITHUB_ENV
 
           echo ""
           echo "Installing already released jupyterhub version $UPGRADE_FROM_VERSION"
 
-          # FIXME: We change the directory so jupyterhub the chart name won't be
-          #        misunderstood as the local folder name.
-          #
-          #        https://github.com/helm/helm/issues/9244
-          cd ci
-          helm install jupyterhub --repo https://jupyterhub.github.io/helm-chart/ jupyterhub --values ../dev-config.yaml --version=$UPGRADE_FROM_VERSION ${{ matrix.upgrade-from-extra-args }}
+          helm install jupyterhub --repo https://hub.jupyter.org/helm-chart/ jupyterhub --values ../dev-config.yaml --version=$UPGRADE_FROM_VERSION ${{ matrix.upgrade-from-extra-args }}
 
       - name: "(Upgrade) Install helm diff"
         if: matrix.test == 'upgrade'
@@ -293,7 +338,7 @@ jobs:
 
       - name: "(Upgrade) Await ${{ matrix.upgrade-from }} chart"
         if: matrix.test == 'upgrade'
-        uses: jupyterhub/action-k8s-await-workloads@v1
+        uses: jupyterhub/action-k8s-await-workloads@v3
         with:
           timeout: 150
           max-restarts: 1
@@ -318,7 +363,7 @@ jobs:
               ${{ matrix.local-chart-extra-args }}
 
       - name: "Await local chart"
-        uses: jupyterhub/action-k8s-await-workloads@v1
+        uses: jupyterhub/action-k8s-await-workloads@v3
         with:
           timeout: 150
           max-restarts: 1
@@ -332,6 +377,9 @@ jobs:
         continue-on-error: ${{ matrix.accept-failure == true }}
         run: |
           . ./ci/common
+          if [ "${{ contains(matrix.local-chart-extra-args, 'subdomain_host') }}" = "true" ]; then
+            export CI_SUBDOMAIN_HOST=jupyterhub.example.org
+          fi
           # If you have problems with the tests add '--capture=no' to show stdout
           pytest --verbose --maxfail=2 --color=yes ./tests
 
@@ -341,3 +389,8 @@ jobs:
         if: always()
         with:
           important-workloads: deploy/hub deploy/proxy
+
+      - name: Debug PostgreSQL logs on failure
+        if: failure() && matrix.setup-postgresql-args
+        run: |
+          kubectl logs statefulset/postgresql
