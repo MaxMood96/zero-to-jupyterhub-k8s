@@ -27,15 +27,18 @@ spec:
     metadata:
       labels:
         {{- /* Changes here will cause the Job to restart the pods. */}}
-        {{- include "jupyterhub.matchLabels" . | nindent 8 }}
+        {{- include "jupyterhub.matchLabelsLegacyAndModern" . | nindent 8 }}
+        {{- with .Values.prePuller.labels }}
+        {{- . | toYaml | nindent 8 }}
+        {{- end }}
       {{- with .Values.prePuller.annotations }}
       annotations:
         {{- . | toYaml | nindent 8 }}
       {{- end }}
     spec:
       restartPolicy: Never
-      {{- if .Values.rbac.enabled }}
-      serviceAccountName: {{ include "jupyterhub.hook-image-awaiter.fullname" . }}
+      {{- with include "jupyterhub.hook-image-awaiter-serviceaccount.fullname" . }}
+      serviceAccountName: {{ . }}
       {{- end }}
       {{- with .Values.prePuller.hook.nodeSelector }}
       nodeSelector:

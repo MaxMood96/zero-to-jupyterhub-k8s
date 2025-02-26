@@ -1,10 +1,18 @@
 # This is a GitHub workflow defining a set of jobs with a set of steps.
-# ref: https://docs.github.com/en/actions/learn-github-actions/workflow-syntax-for-github-actions
+# ref: https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions
 #
 # This workflow use aquasecurity/trivy to scan the images we have published for
 # known vulnerabilities. If there are such that can be patched, we let this
 # workflow fail to signal that unless we make an exception, which we do for the
 # singleuser-sample image only.
+#
+#
+# About environment: watch-dependencies
+#
+# To reduce the exposure of the secrets.jupyterhub_bot_pat token that was setup
+# for the environment watch-dependencies, we have setup a dedicated environment
+# according to steps in
+# https://github.com/jupyterhub/team-compass/issues/516#issuecomment-1129961954.
 #
 name: Vuln. scan
 
@@ -12,20 +20,20 @@ on:
   pull_request:
     paths:
       - ".github/workflows/vuln-scan.yaml"
+  push:
+    paths:
+      - ".github/workflows/vuln-scan.yaml"
+    branches: ["main"]
   schedule:
-    # At 00:00 - https://crontab.guru
-    - cron: "0 0 * * *"
+    # At 05:00 on Monday - https://crontab.guru
+    - cron: "0 5 * * 1"
   workflow_dispatch:
 
 jobs:
   trivy_image_scan:
     if: github.repository == 'jupyterhub/zero-to-jupyterhub-k8s'
-    runs-on: ubuntu-20.04
-    # Write permissions granted for the peter-evans/create-pull-request action
-    # to push to a branch and create/update a PR
-    permissions:
-      contents: write
-      pull-requests: write
+    runs-on: ubuntu-24.04
+    environment: watch-dependencies
 
     strategy:
       fail-fast: false
@@ -43,15 +51,15 @@ jobs:
             accept_failure: false
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           # chartpress requires git history to set chart version and image tags
           # correctly
           fetch-depth: 0
 
-      - uses: actions/setup-python@v3
+      - uses: actions/setup-python@v5
         with:
-          python-version: "3.8"
+          python-version: "3.11"
 
       - name: Install chartpress
         run: |
@@ -69,9 +77,9 @@ jobs:
           )
           echo "Identified image: $IMAGE_SPEC"
 
-          echo "::set-output name=spec::$IMAGE_SPEC"
-          echo "::set-output name=name::$(echo $IMAGE_SPEC | sed 's/\(.*\):.*/\1/')"
-          echo "::set-output name=tag::$(echo $IMAGE_SPEC | sed 's/.*:\(.*\)/\1/')"
+          echo "spec=$IMAGE_SPEC" >> $GITHUB_OUTPUT
+          echo "name=$(echo $IMAGE_SPEC | sed 's/\(.*\):.*/\1/')" >> $GITHUB_OUTPUT
+          echo "tag=$(echo $IMAGE_SPEC | sed 's/.*:\(.*\)/\1/')" >> $GITHUB_OUTPUT
 
       - name: Create ./tmp dir
         run: mkdir ./tmp
@@ -79,7 +87,7 @@ jobs:
       # Action reference: https://github.com/aquasecurity/trivy-action
       - name: Scan latest published image
         id: scan_1
-        uses: aquasecurity/trivy-action@a7a829a4345428ddd92ca57b18257440f6a18c90
+        uses: aquasecurity/trivy-action@6e7b7d1fd3e4fef0c5fa8cce1229c54b2c9bd0d8
         with:
           image-ref: ${{ steps.image.outputs.spec }}
           format: json # ref: https://github.com/aquasecurity/trivy#save-the-results-as-json
@@ -96,13 +104,15 @@ jobs:
       - name: Rebuild image
         id: rebuild
         if: steps.scan_1.outcome == 'failure'
+        env:
+          DOCKER_BUILDKIT: "1"
         run: |
           docker build -t rebuilt-image images/${{ matrix.image_ref }}
 
       - name: Scan rebuilt image
         id: scan_2
         if: steps.rebuild.outcome == 'success'
-        uses: aquasecurity/trivy-action@a7a829a4345428ddd92ca57b18257440f6a18c90
+        uses: aquasecurity/trivy-action@6e7b7d1fd3e4fef0c5fa8cce1229c54b2c9bd0d8
         with:
           image-ref: rebuilt-image
           format: json # ref: https://github.com/aquasecurity/trivy#save-the-results-as-json
@@ -116,7 +126,7 @@ jobs:
         id: analyze
         if: steps.rebuild.outcome == 'success'
         run: |
-          echo "::set-output name=utc_time::$(date --utc +'%F_%T')"
+          echo "utc_time=$(date --utc +'%F_%T')" >> $GITHUB_OUTPUT
 
           json_to_misc() {
               # Count vulnerabilities
@@ -132,19 +142,19 @@ jobs:
                   cat tmp/scan_$1.json | jq -r '.Results[] | select(.Vulnerabilities != null) | .Type + " | " + (.Vulnerabilities[] | .VulnerabilityID + " | " + .PkgName + " | " + .InstalledVersion + " | " + .FixedVersion)' | sort >> tmp/md_summary_$1.md
               fi
 
-              # Use hack to set a multiline string output
-              # ref: https://github.com/actions/toolkit/issues/403#issue-593398879
-              TMP=$(cat tmp/md_summary_$1.md)
-              TMP="${TMP//'%'/'%25'}"
-              TMP="${TMP//$'\n'/'%0A'}"
-              TMP="${TMP//$'\r'/'%0D'}"
-              echo "::set-output name=md_summary_$1::$TMP"
+              # Set a multiline string output with the following technique:
+              # ref: https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#multiline-strings
+              #
+              eof_marker=EOF_$RANDOM
+              echo "md_summary_$1<<$eof_marker" >> $GITHUB_OUTPUT
+              cat tmp/md_summary_$1.md >> $GITHUB_OUTPUT
+              echo "$eof_marker" >> $GITHUB_OUTPUT
 
               # Calculate a hash of the markdown summary
               HASH=$(cat tmp/md_summary_$1.md | sha1sum)
               HASH=${HASH:0:10}
               export HASH_$1=$HASH
-              echo "::set-output name=hash_$1::$HASH"
+              echo "hash_$1=$HASH" >> $GITHUB_OUTPUT
           }
 
           json_to_misc 1
@@ -152,16 +162,16 @@ jobs:
 
           # Did rebuilding the image change anything?
           if [ "$HASH_1" == "$HASH_2" ]; then
-              echo "::set-output name=proceed::no"
+              echo "proceed=no" >> $GITHUB_OUTPUT
               echo "No vulnerabilities were patched by rebuilding the image - won't proceed!"
           else
-              echo "::set-output name=proceed::yes"
+              echo "proceed=yes" >> $GITHUB_OUTPUT
               echo "Vulnerabilities were patched by rebuilding the image - will proceed!"
           fi
 
       - name: Describe vulnerabilities
         if: steps.rebuild.outcome == 'success'
-        uses: aquasecurity/trivy-action@a7a829a4345428ddd92ca57b18257440f6a18c90
+        uses: aquasecurity/trivy-action@6e7b7d1fd3e4fef0c5fa8cce1229c54b2c9bd0d8
         with:
           image-ref: rebuilt-image
           format: table
@@ -195,10 +205,11 @@ jobs:
       # ref: https://github.com/peter-evans/create-pull-request
       - name: Create or update a PR
         if: steps.analyze.outputs.proceed == 'yes' && github.event_name != 'pull_request'
-        uses: peter-evans/create-pull-request@18f7dc018cc2cd597073088f7c7591b9d1c02672
+        uses: peter-evans/create-pull-request@v7
         with:
-          token: "${{ secrets.GITHUB_TOKEN }}"
-          author: jupyterhub vuln-scan bot <noreply@github.com>
+          token: "${{ secrets.jupyterhub_bot_pat }}"
+          author: JupterHub Bot Account <105740858+jupyterhub-bot@users.noreply.github.com>
+          committer: JupterHub Bot Account <105740858+jupyterhub-bot@users.noreply.github.com>
           reviewers: consideratio
           branch: vuln-scan-${{ matrix.image_ref }}
           title: Vulnerability patch in ${{ matrix.image_ref }}

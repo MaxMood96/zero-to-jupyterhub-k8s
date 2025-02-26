@@ -138,3 +138,14 @@ the organizations that support them!)
 - [Berkeley Institute for Data Science](https://bids.berkeley.edu/)
 - [Cal Poly, San Luis Obispo](https://www.calpoly.edu/)
 - [Simula Research Institute](https://www.simula.no/)
+- [2i2c](https://2i2c.org)
+
+## Changelog
+
+This section holds describes the changes between versions and how to upgrade
+between them.
+
+```{toctree}
+:maxdepth: 1
+changelog
+```

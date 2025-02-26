@@ -14,7 +14,8 @@ The JupyterHub Helm chart relies on many dependent projects, and when we make a 
 
 ### Dependent Python packages
 
-Update JupyterHub's Python dependencies in `images/hub/requirements.txt` by going to the folder and running `./dependencies freeze --upgrade`.
+Update JupyterHub's Python dependencies in `images/hub/requirements.txt` by
+following the instructions in `images/hub/README.md`.
 
 Also consider nudging dependent projects in the JupyterHub GitHub organization for a release.
 
@@ -27,7 +28,7 @@ Also consider nudging dependent projects in the JupyterHub GitHub organization f
 These images version/tags are set in [values.yaml](jupyterhub/values.yaml), consider bumping the version of these as well.
 
 - [ ] [configurable-http-proxy](https://github.com/jupyterhub/configurable-http-proxy)
-  - [Available image tags](https://hub.docker.com/r/jupyterhub/configurable-http-proxy/tags)
+  - [Available image tags](https://quay.io/repository/jupyterhub/configurable-http-proxy?tab=tags)
   - values.yaml entry: `proxy.chp.image`
 - [ ] [traefik/traefik](https://github.com/traefik/traefik)
   - [Available image tags](https://hub.docker.com/_/traefik?tab=tags)
@@ -47,7 +48,7 @@ Also the images we build are based on some image specified in the `FROM` stateme
 
 ## Pre-release iteration
 
-- Update `CHANGELOG.md`
+- Update `docs/source/changelog.md`
 
   - [ ] Generate a list of PRs using [executablebooks/github-activity](https://github.com/executablebooks/github-activity)
     ```bash
@@ -64,16 +65,16 @@ Also the images we build are based on some image specified in the `FROM` stateme
     ```bash
     git checkout main
     git reset --hard <upstream>/main
-    git tag -a x.y.z-beta.1 -m x.y.z-beta.1 <commit on main>
-    git push --follow-tags <upstream> main
+    tbump x.y.z-beta.1
     ```
+    This will automatically create a [GitHub prerelease](https://github.com/jupyterhub/zero-to-jupyterhub-k8s/releases).
 
 - Announce the x.y.z-beta.1 release
   - [ ] Write a discourse post
 
 ## Final release
 
-- Update `CHANGELOG.md`
+- Update `docs/source/changelog.md`
 
   - [ ] Generate a list of merged PRs and a list of contributors and update the changelog.
     ```bash
@@ -88,12 +89,16 @@ Also the images we build are based on some image specified in the `FROM` stateme
     ```bash
     git checkout main
     git reset --hard <upstream>/main
-    git tag -a x.y.z -m x.y.z HEAD
-    git push --follow-tags <upstream> main
+    tbump x.y.z
     ```
 
-  - [ ] Create a GitHub release.
-        Visit the [release page](https://github.com/jupyterhub/zero-to-jupyterhub-k8s/releases) and create a new release referencing the recent tag. Add a brief text like the one below.
+    This will automatically create a [GitHub release](https://github.com/jupyterhub/zero-to-jupyterhub-k8s/releases).
+
+  - [ ] Set the next prerelease version (don't create a tag).
+
+    ```bash
+    tbump --no-tag x.y.z+1-0.dev
+    ```
 
 - Communicate
   - [ ] Update the beta release's discourse post.

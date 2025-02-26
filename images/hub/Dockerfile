@@ -1,75 +1,116 @@
-FROM ubuntu:20.04
+# syntax = docker/dockerfile:1.3
+# VULN_SCAN_TIME=2025-02-24_05:06:26
 
-# VULN_SCAN_TIME=2022-03-11_01:25:24
 
-ENV DEBIAN_FRONTEND=noninteractive \
-    LANG=C.UTF-8
+# The build stage
+# ---------------
+# This stage is building Python wheels for use in later stages by using a base
+# image that has more pre-requisites to do so, such as a C++ compiler.
+#
+# NOTE: If the image version is updated, also update it in ci/refreeze and
+#       singleuser-sample's Dockerfile!
+#
+FROM python:3.12-bookworm as build-stage
 
-# psycopg2-binary in requirements.txt is not compiled for linux/arm64
-# TODO: Use build stages to compile psycopg2-binary separately instead of
-# bloating the image size
-RUN EXTRA_APT_PACKAGES=; \
-    if [ `uname -m` != 'x86_64' ]; then EXTRA_APT_PACKAGES=libpq-dev; fi; \
-    apt-get update && \
-    apt-get upgrade -y && \
-    apt-get install -y --no-install-recommends \
-      git \
-      vim \
-      less \
-      python3 \
-      python3-dev \
-      python3-pip \
-      python3-setuptools \
-      python3-wheel \
-      libssl-dev \
-      libcurl4-openssl-dev \
-      build-essential \
-      sqlite3 \
-      curl \
-      dnsutils \
-      $EXTRA_APT_PACKAGES \
-      && \
-    rm -rf /var/lib/apt/lists/*
+# Build wheels
+#
+# We set pip's cache directory and expose it across build stages via an
+# ephemeral docker cache (--mount=type=cache,target=${PIP_CACHE_DIR}). We use
+# the same technique for the directory /tmp/wheels.
+#
+COPY requirements.txt requirements.txt
+ARG PIP_CACHE_DIR=/tmp/pip-cache
+RUN --mount=type=cache,target=${PIP_CACHE_DIR} \
+    pip wheel \
+        --wheel-dir=/tmp/wheels \
+        # pycurl 7.45.3 has wheels, but they aren't portable
+        # https://github.com/pycurl/pycurl/issues/834
+        --no-binary pycurl \
+        -r requirements.txt \
+        # Additional wheels for default-stage. Updates below should be repeated
+        # in default-stage.
+        #
+        py-spy
 
-ARG NB_USER=jovyan
-ARG NB_UID=1000
-ARG HOME=/home/jovyan
 
-RUN adduser --disabled-password \
-    --gecos "Default user" \
-    --uid ${NB_UID} \
-    --home ${HOME} \
-    --force-badname \
-    ${NB_USER}
+# The final stage - slim version
+# ------------------------------
+# This stage is built and published as quay.io/jupyterhub/k8s-hub-slim. It is meant to
+# provide no non-essential packages.
+#
+FROM python:3.12-slim-bookworm as slim-stage
+ENV DEBIAN_FRONTEND=noninteractive
 
+ARG NB_USER=jovyan \
+    NB_UID=1000 \
+    HOME=/home/jovyan
+RUN adduser \
+        --disabled-password \
+        --gecos "Default user" \
+        --uid ${NB_UID} \
+        --home ${HOME} \
+        --force-badname \
+        ${NB_USER}
+
+RUN apt-get update \
+ && apt-get upgrade -y \
+ && apt-get install -y --no-install-recommends \
+        # requirement for pycurl
+        libcurl4 \
+        # requirement for using postgres database
+        libpq5 \
+        # requirement for using a local sqlite database
+        sqlite3 \
+        tini \
+ && rm -rf /var/lib/apt/lists/*
+
+# install wheels built in the build stage
+# --no-index ensures _only_ wheels from the build stage are installed
 COPY requirements.txt /tmp/requirements.txt
-RUN pip3 install --upgrade --no-cache-dir \
-        setuptools \
-        pip
-RUN PYCURL_SSL_LIBRARY=openssl \
-    pip install --no-cache-dir \
+ARG PIP_CACHE_DIR=/tmp/pip-cache
+RUN --mount=type=cache,target=${PIP_CACHE_DIR} \
+    --mount=type=cache,from=build-stage,source=/tmp/wheels,target=/tmp/wheels \
+    pip install \
+        --no-index \
+        --find-links=/tmp/wheels/ \
         -r /tmp/requirements.txt
 
-# Support overriding a package or two through passed docker --build-args.
-# ARG PIP_OVERRIDES="jupyterhub==1.3.0 git+https://github.com/consideratio/kubespawner.git"
-ARG PIP_OVERRIDES=
-RUN if test -n "$PIP_OVERRIDES"; then \
-        pip install --no-cache-dir $PIP_OVERRIDES; \
-    fi
-
 WORKDIR /srv/jupyterhub
-
-# So we can actually write a db file here
 RUN chown ${NB_USER}:${NB_USER} /srv/jupyterhub
+USER ${NB_USER}
 
-# JupyterHub API port
 EXPOSE 8081
+ENTRYPOINT ["tini", "--"]
+CMD ["jupyterhub", "--config", "/usr/local/etc/jupyterhub/jupyterhub_config.py"]
 
-# when building the dependencies image
-# add pip-tools necessary for computing dependencies
-# this is not done in production builds by chartpress
-ARG PIP_TOOLS=
-RUN test -z "$PIP_TOOLS" || pip install --no-cache pip-tools==$PIP_TOOLS
+
+# The final stage - default version
+# ---------------------------------
+# We add a few non-critical packages on top of the slim version to provide some
+# additional utility.
+#
+FROM slim-stage as default-stage
+
+USER root
+
+ARG PIP_CACHE_DIR=/tmp/pip-cache
+RUN --mount=type=cache,target=${PIP_CACHE_DIR} \
+    --mount=type=cache,from=build-stage,source=/tmp/wheels,target=/tmp/wheels \
+    pip install \
+        --no-index \
+        --find-links=/tmp/wheels/ \
+        # Updates below should be repeated in build-stage.
+        #
+        # py-spy is useful for profiling performance of running hubs
+        py-spy
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+        curl \
+        dnsutils \
+        git \
+        less \
+        vim \
+ && rm -rf /var/lib/apt/lists/*
 
 USER ${NB_USER}
-CMD ["jupyterhub", "--config", "/usr/local/etc/jupyterhub/jupyterhub_config.py"]

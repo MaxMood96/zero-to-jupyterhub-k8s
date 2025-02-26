@@ -1,13 +1,14 @@
+# load the config object (satisfies linters)
+c = get_config()  # noqa
+
 import glob
 import os
 import re
 import sys
 
-from binascii import a2b_hex
-
-from tornado.httpclient import AsyncHTTPClient
-from kubernetes_asyncio import client
 from jupyterhub.utils import url_path_join
+from kubernetes_asyncio import client
+from tornado.httpclient import AsyncHTTPClient
 
 # Make sure that modules placed in the same directory as the jupyterhub config are added to the pythonpath
 configuration_directory = os.path.dirname(os.path.realpath(__file__))
@@ -15,10 +16,10 @@ sys.path.insert(0, configuration_directory)
 
 from z2jh import (
     get_config,
-    set_config_if_not_none,
     get_name,
     get_name_env,
     get_secret_value,
+    set_config_if_not_none,
 )
 
 
@@ -106,28 +107,35 @@ c.JupyterHub.hub_connect_url = (
 )
 
 # implement common labels
-# this duplicates the jupyterhub.commonLabels helper
+# This mimics the jupyterhub.commonLabels helper, but declares managed-by to
+# kubespawner instead of helm.
+#
+# The labels app and release are old labels enabled to be deleted in z2jh 5, but
+# for now retained to avoid a breaking change in z2jh 4 that would force user
+# server restarts. Restarts would be required because NetworkPolicy resources
+# must select old/new pods with labels that then needs to be seen on both
+# old/new pods, and we want these resources to keep functioning for old/new user
+# server pods during an upgrade.
+#
 common_labels = c.KubeSpawner.common_labels = {}
-common_labels["app"] = get_config(
+common_labels["app.kubernetes.io/name"] = common_labels["app"] = get_config(
     "nameOverride",
     default=get_config("Chart.Name", "jupyterhub"),
 )
-common_labels["heritage"] = "jupyterhub"
+release = get_config("Release.Name")
+if release:
+    common_labels["app.kubernetes.io/instance"] = common_labels["release"] = release
 chart_name = get_config("Chart.Name")
 chart_version = get_config("Chart.Version")
 if chart_name and chart_version:
-    common_labels["chart"] = "{}-{}".format(
-        chart_name,
-        chart_version.replace("+", "_"),
+    common_labels["helm.sh/chart"] = common_labels["chart"] = (
+        f"{chart_name}-{chart_version.replace('+', '_')}"
     )
-release = get_config("Release.Name")
-if release:
-    common_labels["release"] = release
+common_labels["app.kubernetes.io/managed-by"] = "kubespawner"
 
 c.KubeSpawner.namespace = os.environ.get("POD_NAMESPACE", "default")
 
 # Max number of consecutive failures before the Hub restarts itself
-# requires jupyterhub 0.9.2
 set_config_if_not_none(
     c.Spawner,
     "consecutive_failure_limit",
@@ -142,6 +150,7 @@ for trait, cfg_key in (
     ("events_enabled", "events"),
     ("extra_labels", None),
     ("extra_annotations", None),
+    # ("allow_privilege_escalation", None), # Managed manually below
     ("uid", None),
     ("fs_gid", None),
     ("service_account", "serviceAccountName"),
@@ -178,6 +187,15 @@ if image:
         image = f"{image}:{tag}"
 
     c.KubeSpawner.image = image
+
+# allow_privilege_escalation defaults to False in KubeSpawner 2+. Since its a
+# property where None, False, and True all are valid values that users of the
+# Helm chart may want to set, we can't use the set_config_if_not_none helper
+# function as someone may want to override the default False value to None.
+#
+c.KubeSpawner.allow_privilege_escalation = get_config(
+    "singleuser.allowPrivilegeEscalation"
+)
 
 # Combine imagePullSecret.create (single), imagePullSecrets (list), and
 # singleuser.image.pullSecrets (list).
@@ -238,7 +256,8 @@ if tolerations:
 storage_type = get_config("singleuser.storage.type")
 if storage_type == "dynamic":
     pvc_name_template = get_config("singleuser.storage.dynamic.pvcNameTemplate")
-    c.KubeSpawner.pvc_name_template = pvc_name_template
+    if pvc_name_template:
+        c.KubeSpawner.pvc_name_template = pvc_name_template
     volume_name_template = get_config("singleuser.storage.dynamic.volumeNameTemplate")
     c.KubeSpawner.storage_pvc_ensure = True
     set_config_if_not_none(
@@ -257,13 +276,14 @@ if storage_type == "dynamic":
     c.KubeSpawner.volumes = [
         {
             "name": volume_name_template,
-            "persistentVolumeClaim": {"claimName": pvc_name_template},
+            "persistentVolumeClaim": {"claimName": "{pvc_name}"},
         }
     ]
     c.KubeSpawner.volume_mounts = [
         {
             "mountPath": get_config("singleuser.storage.homeMountPath"),
             "name": volume_name_template,
+            "subPath": get_config("singleuser.storage.dynamic.subPath"),
         }
     ]
 elif storage_type == "static":
@@ -362,6 +382,9 @@ if get_config("cull.enabled", False):
         cull_cmd.append("--cull-users")
         jupyterhub_idle_culler_role["scopes"].append("admin:users")
 
+    if not get_config("cull.adminUsers"):
+        cull_cmd.append("--cull-admin-users=false")
+
     if get_config("cull.removeNamedServers"):
         cull_cmd.append("--remove-named-servers")
 
@@ -396,27 +419,37 @@ for key, role in get_config("hub.loadRoles", {}).items():
 
     c.JupyterHub.load_roles.append(role)
 
+# respect explicit null command (distinct from unspecified)
+# this avoids relying on KubeSpawner.cmd's default being None
+_unspecified = object()
+specified_cmd = get_config("singleuser.cmd", _unspecified)
+if specified_cmd is not _unspecified:
+    c.Spawner.cmd = specified_cmd
 
-set_config_if_not_none(c.Spawner, "cmd", "singleuser.cmd")
 set_config_if_not_none(c.Spawner, "default_url", "singleuser.defaultUrl")
 
-cloud_metadata = get_config("singleuser.cloudMetadata", {})
+cloud_metadata = get_config("singleuser.cloudMetadata")
 
 if cloud_metadata.get("blockWithIptables") == True:
     # Use iptables to block access to cloud metadata by default
     network_tools_image_name = get_config("singleuser.networkTools.image.name")
     network_tools_image_tag = get_config("singleuser.networkTools.image.tag")
     network_tools_resources = get_config("singleuser.networkTools.resources")
+    ip = cloud_metadata["ip"]
     ip_block_container = client.V1Container(
         name="block-cloud-metadata",
         image=f"{network_tools_image_name}:{network_tools_image_tag}",
         command=[
             "iptables",
-            "-A",
+            "--append",
             "OUTPUT",
-            "-d",
-            cloud_metadata.get("ip", "169.254.169.254"),
-            "-j",
+            "--protocol",
+            "tcp",
+            "--destination",
+            ip,
+            "--destination-port",
+            "80",
+            "--jump",
             "DROP",
         ],
         security_context=client.V1SecurityContext(

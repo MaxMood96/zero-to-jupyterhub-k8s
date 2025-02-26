@@ -5,6 +5,9 @@ metadata:
   labels:
     {{- include "jupyterhub.labels" . | nindent 4 }}
 spec:
+  {{- if not (typeIs "<nil>" .Values.hub.revisionHistoryLimit) }}
+  revisionHistoryLimit: {{ .Values.hub.revisionHistoryLimit }}
+  {{- end }}
   replicas: 1
   selector:
     matchLabels:
@@ -15,7 +18,7 @@ spec:
     metadata:
       labels:
         {{- /* Changes here will cause the Deployment to restart the pods. */}}
-        {{- include "jupyterhub.matchLabels" . | nindent 8 }}
+        {{- include "jupyterhub.matchLabelsLegacyAndModern" . | nindent 8 }}
         hub.jupyter.org/network-access-proxy-api: "true"
         hub.jupyter.org/network-access-proxy-http: "true"
         hub.jupyter.org/network-access-singleuser: "true"
@@ -75,11 +78,13 @@ spec:
           persistentVolumeClaim:
             claimName: {{ include "jupyterhub.hub-pvc.fullname" . }}
         {{- end }}
-      {{- if .Values.rbac.enabled }}
-      serviceAccountName: {{ include "jupyterhub.hub.fullname" . }}
+      {{- with include "jupyterhub.hub-serviceaccount.fullname" . }}
+      serviceAccountName: {{ . }}
       {{- end }}
+      {{- with .Values.hub.podSecurityContext }}
       securityContext:
-        fsGroup: {{ .Values.hub.fsGid }}
+        {{- . | toYaml | nindent 8 }}
+      {{- end }}
       {{- with include "jupyterhub.imagePullSecrets" (dict "root" . "image" .Values.hub.image) }}
       imagePullSecrets: {{ . }}
       {{- end }}
@@ -88,9 +93,6 @@ spec:
         {{- . | toYaml | nindent 8 }}
       {{- end }}
       containers:
-        {{- with .Values.hub.extraContainers }}
-        {{- . | toYaml | nindent 8 }}
-        {{- end }}
         - name: hub
           image: {{ .Values.hub.image.name }}:{{ .Values.hub.image.tag }}
           {{- with .Values.hub.command }}
@@ -233,6 +235,9 @@ spec:
               path: {{ .Values.hub.baseUrl | trimSuffix "/" }}/hub/health
               port: http
           {{- end }}
+        {{- with .Values.hub.extraContainers }}
+        {{- . | toYaml | nindent 8 }}
+        {{- end }}
       {{- with .Values.hub.extraPodSpec }}
       {{- . | toYaml | nindent 6 }}
       {{- end }}

@@ -16,23 +16,36 @@
 #
 #   https://github.com/koalaman/shellcheck#installing
 #
-#   pre-commit run --config .pre-commit-config-shellcheck.yaml --all-files
+#   pre-commit run --hook-stage=manual shellcheck --all-files
 #
 repos:
   # Autoformat: Python code, syntax patterns are modernized
   - repo: https://github.com/asottile/pyupgrade
-    rev: v2.31.1
+    rev: v3.19.1
     hooks:
       - id: pyupgrade
         args:
-          - --py36-plus
+          - --py38-plus
 
   # Autoformat: Python code
   - repo: https://github.com/psf/black
-    rev: 22.1.0
+    rev: 25.1.0
     hooks:
       - id: black
-        args: [--target-version=py36]
+        args:
+          - --target-version=py38
+          - --target-version=py39
+          - --target-version=py310
+          - --target-version=py311
+          - --target-version=py312
+
+  # Autoformat: Python code
+  - repo: https://github.com/pycqa/isort
+    rev: 6.0.0
+    hooks:
+      - id: isort
+        args:
+          - --profile=black
 
   # Autoformat: Bash scripts
   - repo: https://github.com/lovesegfault/beautysh
@@ -42,12 +55,30 @@ repos:
 
   # Autoformat: markdown, yaml (but not helm templates)
   - repo: https://github.com/pre-commit/mirrors-prettier
-    rev: v2.5.1
+    rev: v4.0.0-alpha.8
     hooks:
       - id: prettier
 
   # Reset Chart.yaml version and values.yaml image tags
   - repo: https://github.com/jupyterhub/chartpress
-    rev: 1.3.0
+    rev: 2.3.0
     hooks:
       - id: chartpress
+
+  # Linting: Python code (see the file .flake8)
+  - repo: https://github.com/PyCQA/flake8
+    rev: "7.1.1"
+    hooks:
+      - id: flake8
+
+  - repo: https://github.com/gruntwork-io/pre-commit
+    rev: v0.1.25
+    hooks:
+      # This requires shellcheck to be installed manually so is disabled by default
+      - id: shellcheck
+        stages:
+          - manual
+
+# pre-commit.ci config reference: https://pre-commit.ci/#configuration
+ci:
+  autoupdate_schedule: monthly

@@ -164,7 +164,7 @@ singleuser:
 
 prePuller:
   extraImages:
-    myOtherImageIWantPulled:
+    my-other-image-i-want-pulled:
       name: jupyter/all-spark-notebook
       tag: 2343e33dec46
 ```
@@ -189,7 +189,7 @@ waiting time for the pod, and as a pod can represent a user, it can lead to a
 long waiting time for a user. There are now options to address this.
 
 With Kubernetes 1.11+ (that requires Helm 2.11+), [Pod Priority and
-Preemption](https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/)
+Preemption](https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/)
 was introduced. This allows pods with higher priority to preempt / evict pods
 with lower priority if that would help the higher priority pod fit on a node.
 
@@ -438,7 +438,7 @@ relevant:
    harder to debug. Various timeouts can be clues to suspect CPU starvation.
 
 1. When scheduling a Pod on a node, the [_effective
-   requests/limits_](https://kubernetes.io/docs/concepts/workloads/pods/init-containers/#resources)
+   requests/limits_](https://kubernetes.io/docs/concepts/workloads/pods/init-containers/#resource-sharing-within-containers)
    are considered. As a Pod's init containers are run in sequence before the
    Pod's main containers are started, the effective requests/limits are
    calculated as the highest of the init containers requests/limits and the sum

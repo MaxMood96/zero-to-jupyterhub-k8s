@@ -3,44 +3,47 @@
 # Authentication and authorization
 
 Authentication is about identity, while _authorization_ is about permissions. In
-this section you will learn how to configure both. As an example, you can
-configure authentication using GitHub accounts and restrict what users are
-authorized based on membership of a GitHub organization.
+this section you will learn how to configure both by choosing and configuring a
+_JupyterHub Authenticator class_.
 
-Before configuring this, you should have [setup HTTPS](https).
+As an example, you can configure JupyterHub to delegate authentication and
+authorization to the GitHubOAuthenticator. It enable users to login with GitHub
+accounts, where perhaps only a few specific users and other users users part of
+a specific GitHub organization is allowed access.
+
+Before configuring authentication with an external identity provider, you must
+have [setup HTTPS](https).
 
 ## Useful understanding
 
 ### Authenticator classes
 
-JupyterHub by default ships with only one source of authentication:
-PAM, the underlying unix authentication of the host system.
-To use other sources of authentication, choose _one_ [_authenticator
-class_](https://jupyterhub.readthedocs.io/en/stable/reference/authenticators.html) to use.
-Several such classes are already available in the hub image through [installed
-Python
-packages](https://github.com/jupyterhub/zero-to-jupyterhub-k8s/blob/HEAD/images/hub/requirements.txt).
+By default a Z2JH deployment use the
+{external:py:class}`jupyterhub.auth.DummyAuthenticator` JupyterHub authenticator
+class that allows anyone to login with any username and password. This should
+only be used for initial testing purposes.
 
-JupyterHub provides a base class,
-[`Authenticator`](https://github.com/jupyterhub/jupyterhub/blob/HEAD/jupyterhub/auth.py),
-that all other authenticator classes are supposed to derive from. By configuring
-this base class, we influence the behavior of the derived class as well.
+You should decide on a [jupyterhub authenticator class] to use. Several such
+classes are available in the hub image through [installed Python packages], and
+a few of them are described below.
+
+[authenticator class]: https://jupyterhub.readthedocs.io/en/stable/reference/authenticators.html
+[installed python packages]: https://github.com/jupyterhub/zero-to-jupyterhub-k8s/blob/HEAD/images/hub/requirements.txt
 
 ### The configuration system
 
-We configure JupyterHub to use our chosen authenticator class and the
-authenticator class itself through this Helm chart's
+First we should configure JupyterHub to use our chosen authenticator class and
+the authenticator class itself through this Helm chart's
 [`hub.config`](schema_hub.config) configuration.
 
 ## General configuration
 
-As all authenticator classes derive from the `Authenticator` base class, they
-share some configuration options. Below are some common configuration options,
-but please refer to the official [configuration
-reference](https://jupyterhub.readthedocs.io/en/latest/api/auth.html) for more
-details.
+As all authenticator classes derive from the
+{external:py:class}`jupyterhub.auth.Authenticator` base class, they share some
+configuration options. Below are some common configuration options from the base
+class.
 
-### [allowed_users](https://jupyterhub.readthedocs.io/en/latest/api/auth.html#jupyterhub.auth.Authenticator.allowed_users) / [admin_users](https://jupyterhub.readthedocs.io/en/latest/api/auth.html#jupyterhub.auth.LocalAuthenticator.admin_users)
+### [allowed_users](https://jupyterhub.readthedocs.io/en/stable/reference/api/auth.html#jupyterhub.auth.Authenticator.allowed_users) / [admin_users](https://jupyterhub.readthedocs.io/en/stable/reference/api/auth.html#jupyterhub.auth.LocalAuthenticator.admin_users)
 
 Some authenticator classes may have dedicated logic in addition this this to
 authorize users.
@@ -68,7 +71,7 @@ In the above configuration, we have configured three things:
 2. anyone will be able to login with username `user1-4` and the password `a-shared-secret-password`
 3. `user1` and `user2` will have admin permissions, while `user3` and `user4` will be regular users.
 
-### [auto_login](https://jupyterhub.readthedocs.io/en/latest/api/auth.html#jupyterhub.auth.Authenticator.auto_login)
+### [auto_login](https://jupyterhub.readthedocs.io/en/stable/reference/api/auth.html#jupyterhub.auth.Authenticator.auto_login)
 
 If you have configured authentication with GitHub for example, the page
 `/hub/login` will feature a single orange button that users are to press to
@@ -82,7 +85,7 @@ hub:
       auto_login: true
 ```
 
-### [enable_auth_state](https://jupyterhub.readthedocs.io/en/latest/api/auth.html#jupyterhub.auth.Authenticator.enable_auth_state)
+### [enable_auth_state](https://jupyterhub.readthedocs.io/en/stable/reference/api/auth.html#jupyterhub.auth.Authenticator.enable_auth_state)
 
 If you want JupyterHub to persist often sensitive information received as part
 of logging in, you need to enable it.
@@ -95,7 +98,7 @@ hub:
 ```
 
 For more information about authentication state, see [JupyterHub's own
-documentation](https://jupyterhub.readthedocs.io/en/latest/reference/authenticators.html#authentication-state)
+documentation](https://jupyterhub.readthedocs.io/en/stable/reference/authenticators.html#authentication-state)
 about authentication state.
 
 ````{note}
@@ -127,16 +130,27 @@ documentation.
 
 ### OAuth2 based authentication
 
-JupyterHub's [oauthenticator](https://github.com/jupyterhub/oauthenticator) has
-support for enabling your users to authenticate via a third-party OAuth2
-_identity provider_ such as GitHub, Google, and CILogon. All of these will
-require an OAuth2 _client id_ and _client secret_.
+JupyterHub's [oauthenticator](https://github.com/jupyterhub/oauthenticator)
+project has support for enabling your users to authenticate via a third-party
+OAuth2 _identity provider_ such as GitHub, Google, and CILogon. All of these
+will require an OAuth2 _client id_ and _client secret_.
 
 For details on how to acquire a client id and client secret, please refer to
 [oauthenticator's
-documentation](https://oauthenticator.readthedocs.io/en/stable/getting-started.html).
+documentation](https://oauthenticator.readthedocs.io/en/stable/tutorials/general-setup.html).
 
 #### GitHub
+
+```{warning}
+This documentation may not have been updated recently. Due to that, please only use this
+_as a complement_ to the official [GitHubOAuthenticator documentation].
+
+[githuboauthenticator documentation]: https://oauthenticator.readthedocs.io/en/latest/tutorials/provider-specific-setup/providers/github.html
+
+Going onwards, the goal is to ensure we have good documentation in the
+OAuthenticator project and reference that instead of maintaining similar
+documentation in this project also.
+```
 
 GitHub is the largest hosting service for git repositories. It is free to create
 an account at GitHub, and relatively straightforward to set up OAuth credentials
@@ -175,7 +189,7 @@ hub:
       allowed_organizations:
         - my-github-organization
       scope:
-        - read:user
+        - read:org
 ```
 
 If you would like to restrict access to a specific team within a GitHub organization, use
@@ -192,14 +206,25 @@ hub:
 ```
 
 ```{admonition} About the choice of scope
-The narrower scope `read:user` is sufficient for a configuration of `allowed_organizations` to function if you both list only entire organizations rather than specific teams, and if the users [make their organization membership public](https://docs.github.com/en/github/setting-up-and-managing-your-github-user-account/managing-your-membership-in-organizations/publicizing-or-hiding-organization-membership).
+The narrower scope `read:user` is sufficient for a configuration of `allowed_organizations` to function if you both list only entire organizations rather than specific teams, and if the users [make their organization membership public](https://docs.github.com/en/account-and-profile/setting-up-and-managing-your-personal-account-on-github/managing-your-membership-in-organizations/publicizing-or-hiding-organization-membership).
 
-The broader scope `read:org` doesn't have the limitations of `read:user`, but will require a one-off approval by the admins of the GitHub organizations' listed in `allowed_organizations`. This kind of approval can be requested by organization users [as documented on GitHub](https://docs.github.com/en/github/setting-up-and-managing-your-github-user-account/managing-your-membership-in-organizations/requesting-organization-approval-for-oauth-apps).
+The broader scope `read:org` doesn't have the limitations of `read:user`, but will require a one-off approval by the admins of the GitHub organizations' listed in `allowed_organizations`. This kind of approval can be requested by organization users [as documented on GitHub](https://docs.github.com/en/account-and-profile/setting-up-and-managing-your-personal-account-on-github/managing-your-membership-in-organizations/requesting-organization-approval-for-oauth-apps).
 
-For details about GitHub scopes, see [GitHub's documentation](https://docs.github.com/en/developers/apps/scopes-for-oauth-apps).
+For details about GitHub scopes, see [GitHub's documentation](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/scopes-for-oauth-apps).
 ```
 
 #### Google
+
+```{warning}
+This documentation may not have been updated recently. Due to that, please only use this
+_as a complement_ to the official [GoogleOAuthenticator documentation].
+
+[googleoauthenticator documentation]: https://oauthenticator.readthedocs.io/en/latest/tutorials/provider-specific-setup/providers/google.html
+
+Going onwards, the goal is to ensure we have good documentation in the
+OAuthenticator project and reference that instead of maintaining similar
+documentation in this project also.
+```
 
 Google authentication is used by many universities (it is part of "G Suite").
 
@@ -250,6 +275,17 @@ users which account they are using to login.
 
 #### CILogon
 
+```{warning}
+This documentation may not have been updated recently. Due to that, please only use this
+_as a complement_ to the official [CILogonOAuthenticator documentation].
+
+[ciLogonoauthenticator documentation]: https://oauthenticator.readthedocs.io/en/latest/tutorials/provider-specific-setup/providers/cilogon.html
+
+Going onwards, the goal is to ensure we have good documentation in the
+OAuthenticator project and reference that instead of maintaining similar
+documentation in this project also.
+```
+
 Please see CyberInfrastructure Logon's [website](https://www.cilogon.org) for
 more information about what kind of identity is managed by CILogon.
 
@@ -264,18 +300,18 @@ hub:
       authenticator_class: cilogon
 ```
 
-Based on [this
-caveat](https://github.com/jupyterhub/oauthenticator/blob/6f239bebecbb3fb0242de7f753ae1c93ed101340/oauthenticator/cilogon.py#L5-L14),
-you may need to also set the following.
-
-```yaml
-hub:
-  config:
-    CILogonOAuthenticator:
-      username_claim: email
-```
-
 #### Globus
+
+```{warning}
+This documentation may not have been updated recently. Due to that, please only use this
+_as a complement_ to the official [GlobusOAuthenticator documentation].
+
+[globusoauthenticator documentation]: https://oauthenticator.readthedocs.io/en/latest/tutorials/provider-specific-setup/providers/globus.html
+
+Going onwards, the goal is to ensure we have good documentation in the
+OAuthenticator project and reference that instead of maintaining similar
+documentation in this project also.
+```
 
 Globus Auth is a foundational identity and access management platform
 service designed to address unique needs of the science and engineering
@@ -298,7 +334,18 @@ hub:
 
 #### Azure Active Directory
 
-[Azure Active Directory](https://docs.microsoft.com/en-us/azure/active-directory/)
+```{warning}
+This documentation may not have been updated recently. Due to that, please only use this
+_as a complement_ to the official [AzureAdOAuthenticator documentation].
+
+[azureadoauthenticator documentation]: https://oauthenticator.readthedocs.io/en/latest/tutorials/provider-specific-setup/providers/azuread.html
+
+Going onwards, the goal is to ensure we have good documentation in the
+OAuthenticator project and reference that instead of maintaining similar
+documentation in this project also.
+```
+
+[Azure Active Directory](https://learn.microsoft.com/en-us/azure/active-directory/)
 is an identity provider from Microsoft Azure. Apart from needing a OAuth2
 _client id_ and _client secret_, you will also need a _tenant id_.
 
@@ -316,6 +363,17 @@ hub:
 
 #### Auth0
 
+```{warning}
+This documentation may not have been updated recently. Due to that, please only use this
+_as a complement_ to the official [Auth0OAuthenticator documentation].
+
+[auth0oauthenticator documentation]: https://oauthenticator.readthedocs.io/en/latest/tutorials/provider-specific-setup/providers/auth0.html
+
+Going onwards, the goal is to ensure we have good documentation in the
+OAuthenticator project and reference that instead of maintaining similar
+documentation in this project also.
+```
+
 [Auth0](https://auth0.com/) is a commercial provider of identity management.
 
 ```yaml
@@ -325,58 +383,49 @@ hub:
       client_id: client-id-from-auth0-here
       client_secret: client-secret-from-auth0-here
       oauth_callback_url: https://your-jupyterhub-domain/hub/oauth_callback
+      auth0_domain: prod-8ua-1yy9.auth0.com
       scope:
         - openid
         - email
-      auth0_subdomain: prod-8ua-1yy9
-    Authenticator:
-      admin_users:
-        - devops@example.com
-      auto_login: true
     JupyterHub:
       authenticator_class: auth0
 ```
 
 #### GenericOAuthenticator - OpenID Connect
 
+```{warning}
+This documentation may not have been updated recently. Due to that, please only use this
+_as a complement_ to the official [GenericOAuthenticator documentation].
+
+[genericoauthenticator documentation]: https://oauthenticator.readthedocs.io/en/latest/tutorials/provider-specific-setup/providers/generic.html
+
+Going onwards, the goal is to ensure we have good documentation in the
+OAuthenticator project and reference that instead of maintaining similar
+documentation in this project also.
+```
+
 [OpenID Connect](https://openid.net/connect) is an identity layer on top of the
 OAuth 2.0 protocol, implemented by [various servers and
-services](https://openid.net/developers/certified/#OPServices). While OpenID
+services](https://openid.net/certified-open-id-developer-tools/). While OpenID
 Connect endpoint discovery is not supported by oauthentiator, you can still
 configure JupyterHub to authenticate with OpenID Connect providers by specifying
 all endpoints in the GenericOAuthenticator class.
 
-##### Auth0
-
-Below is an example on how you can configure the GenericOAuthenticator to
-authenticate against Auth0.
-
-```yaml
-hub:
-  config:
-    GenericOAuthenticator:
-      client_id: your-client-id
-      client_secret: your-client-secret
-      oauth_callback_url: https://your-jupyterhub-domain/hub/oauth_callback
-      authorize_url: https://your-domain.us.auth0.com/authorize
-      token_url: https://your-domain.us.auth0.com/oauth/token
-      userdata_url: https://your-domain.us.auth0.com/userinfo
-      scope:
-        - openid
-        - name
-        - profile
-        - email
-      username_key: name
-    JupyterHub:
-      authenticator_class: generic-oauth
-```
-
 ##### KeyCloak
+
+```{warning}
+This documentation may not have been updated recently. Due to that, please only use this
+_as a complement_ to the official [GenericOAuthenticator documentation].
+
+Going onwards, the goal is to ensure we have good documentation in the
+OAuthenticator project and reference that instead of maintaining similar
+documentation in this project also.
+```
 
 [KeyCloak](https://www.keycloak.org) is an open source based provider of
 identity management that you can host yourself. Below is an example on how you
 can configure the GenericOAuthenticator class to authenticate against a KeyCloak
-server.
+server (version 17 or later).
 
 To configure an OpenID Connect client, see [KeyCloak's own
 documentation](https://www.keycloak.org/docs/latest/server_admin/index.html#_oidc_clients).
@@ -388,18 +437,33 @@ hub:
       client_id: your-client-id
       client_secret: your-client-secret
       oauth_callback_url: https://your-jupyterhub-domain/hub/oauth_callback
-      authorize_url: https://${host}/auth/realms/${realm}/protocol/openid-connect/auth
-      token_url: https://${host}/auth/realms/${realm}/protocol/openid-connect/token
-      userdata_url: https://${host}/auth/realms/${realm}/protocol/openid-connect/userinfo
+      authorize_url: https://${host}/realms/${realm}/protocol/openid-connect/auth
+      token_url: https://${host}/realms/${realm}/protocol/openid-connect/token
+      userdata_url: https://${host}/realms/${realm}/protocol/openid-connect/userinfo
       login_service: keycloak
-      username_key: preferred_username
+      username_claim: preferred_username
       userdata_params:
         state: state
+      # Allow all Keycloak users
+      allow_all: true
+      admin_users:
+        - admin
     JupyterHub:
       authenticator_class: generic-oauth
 ```
 
 ### LDAP and Active Directory
+
+```{warning}
+This documentation may not have been updated recently. Due to that, please only use this
+_as a complement_ to the official [LDAPAuthenticator documentation].
+
+[ldapauthenticator documentation]: https://github.com/jupyterhub/ldapauthenticator#readme
+
+Going onwards, the goal is to ensure we have good documentation in the
+OAuthenticator project and reference that instead of maintaining similar
+documentation in this project also.
+```
 
 JupyterHub supports LDAP and Active Directory authentication. Read the
 [ldapauthenticator](https://github.com/jupyterhub/ldapauthenticator)

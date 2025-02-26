@@ -1,47 +1,29 @@
-# dependabot.yml reference: https://docs.github.com/en/code-security/supply-chain-security/keeping-your-dependencies-updated-automatically/configuration-options-for-dependency-updates
+# dependabot.yml reference: https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
 #
 # Notes:
 # - Status and logs from dependabot are provided at
 #   https://github.com/jupyterhub/zero-to-jupyterhub-k8s/network/updates.
 # - YAML anchors are not supported here or in GitHub Workflows.
-# - versioning-strategy: lockfile-only must not be used if you only have a plain
-#   requirements.txt like we do in images/singleuser-sample.
-# - We explicitly set the "maintenance" label to help our changelog generator
-#   tool github-activity to categorize PRs.
 #
-
 version: 2
 updates:
-  # Maintain Python dependencies for the jupyterhub/k8s-hub image
-  - package-ecosystem: pip
-    directory: "/images/hub"
-    schedule:
-      interval: daily
-      time: "00:00"
-      timezone: "Etc/UTC"
-    versioning-strategy: lockfile-only
-    labels:
-      - maintenance
-      - dependencies
-
-  # Maintain Python dependencies for the jupyterhub/k8s-singleuser-sample image
-  - package-ecosystem: pip
-    directory: "/images/singleuser-sample"
-    schedule:
-      interval: daily
-      time: "05:00"
-      timezone: "Etc/UTC"
-    labels:
-      - maintenance
-      - dependencies
-
   # Maintain dependencies in our GitHub Workflows
-  - package-ecosystem: "github-actions"
-    directory: "/" # This should be / rather than .github/workflows
+  - package-ecosystem: github-actions
+    directory: /
+    labels: [ci]
+    schedule:
+      interval: monthly
+      time: "05:00"
+      timezone: Etc/UTC
+  - package-ecosystem: pip
+    directory: /images/hub/unfrozen
+    labels: [breaking]
+    groups:
+      major-versions:
+        update-types: [major]
+        exclude-patterns:
+          - jupyterhub # bumped by other automation
     schedule:
       interval: daily
       time: "05:00"
-      timezone: "Etc/UTC"
-    labels:
-      - maintenance
-      - dependencies
+      timezone: Etc/UTC

@@ -1,8 +1,13 @@
+import json
+import os
 import subprocess
 import time
 
 import pytest
 import requests
+
+# If we're testing subdomain hosts in GitHub CI our workflow will set this
+CI_SUBDOMAIN_HOST = os.getenv("CI_SUBDOMAIN_HOST")
 
 
 def test_spawn_basic(
@@ -22,22 +27,78 @@ def test_spawn_basic(
     r = api_request.post("/users/" + jupyter_user + "/server")
     assert r.status_code in (201, 202)
     try:
-        # check successfull spawn
+        # check successful spawn
         server_model = _wait_for_user_to_spawn(
             api_request, jupyter_user, request_data["test_timeout"]
         )
         assert server_model
-        r = requests.get(
-            request_data["hub_url"].partition("/hub/api")[0]
-            + server_model["url"]
-            + "api",
-            verify=pebble_acme_ca_cert,
-        )
+
+        hub_parent_url = request_data["hub_url"].partition("/hub/api")[0]
+
+        if CI_SUBDOMAIN_HOST:
+            # We can't make a proper request since wildcard DNS isn't setup,
+            # but we can set the Host header to test that CHP correctly forwards
+            # the request to the singleuser server
+            assert (
+                server_model["url"]
+                == f"https://{jupyter_user}.{CI_SUBDOMAIN_HOST}/user/{jupyter_user}/"
+            )
+
+            # It shouldn't be possible to access the server without the subdomain,
+            # should instead be redirected to hub
+            r_incorrect = requests.get(
+                f"{hub_parent_url}/user/{jupyter_user}/api",
+                verify=pebble_acme_ca_cert,
+                allow_redirects=False,
+            )
+            assert r_incorrect.status_code == 302
+
+            r = requests.get(
+                f"{hub_parent_url}/user/{jupyter_user}/api",
+                headers={"Host": f"{jupyter_user}.{CI_SUBDOMAIN_HOST}"},
+                verify=False,
+                allow_redirects=False,
+            )
+        else:
+            r = requests.get(
+                hub_parent_url + server_model["url"] + "api",
+                verify=pebble_acme_ca_cert,
+            )
+
         assert r.status_code == 200
         assert "version" in r.json()
 
-        # check user pod's extra environment variable
         pod_name = server_model["state"]["pod_name"]
+
+        # check user pod's labels
+        pod_json = subprocess.check_output(
+            [
+                "kubectl",
+                "get",
+                "pod",
+                "--output=json",
+                pod_name,
+            ]
+        )
+        pod = json.loads(pod_json)
+        pod_labels = pod["metadata"]["labels"]
+
+        # check for modern labels
+        assert pod_labels["app.kubernetes.io/name"] == "jupyterhub"
+        assert "app.kubernetes.io/instance" in pod_labels
+        # FIXME: app.kubernetes.io/component for user pods require kubespawner
+        #        with https://github.com/jupyterhub/kubespawner/pull/835.
+        # assert pod_labels["app.kubernetes.io/component"] == "singleuser-server"
+        assert pod_labels["helm.sh/chart"].startswith("jupyterhub-")
+        assert pod_labels["app.kubernetes.io/managed-by"] == "kubespawner"
+
+        # check for legacy labels still meant to be around
+        assert pod_labels["app"] == "jupyterhub"
+        assert "release" in pod_labels
+        assert pod_labels["chart"].startswith("jupyterhub-")
+        assert pod_labels["component"] == "singleuser-server"
+
+        # check user pod's extra environment variable
         c = subprocess.run(
             [
                 "kubectl",
@@ -51,7 +112,7 @@ def test_spawn_basic(
         )
         assert (
             c.returncode == 0
-        ), f"singleuser.extraEnv didn't lead to a mounted environment variable!"
+        ), "singleuser.extraEnv didn't lead to a mounted environment variable!"
 
         # check user pod's extra files
         c = subprocess.run(
@@ -67,7 +128,7 @@ def test_spawn_basic(
         )
         assert (
             c.returncode == 0
-        ), f"The singleuser.extraFiles configuration doesn't seem to have been honored!"
+        ), "The singleuser.extraFiles configuration doesn't seem to have been honored!"
     finally:
         _delete_server(api_request, jupyter_user, request_data["test_timeout"])
 
