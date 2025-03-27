@@ -36,7 +36,7 @@ charset-normalizer==2.0.12
     # via
     #   aiohttp
     #   requests
-cryptography==36.0.1
+cryptography==42.0.8
     # via
     #   josepy
     #   jwcrypto
@@ -160,7 +160,7 @@ pyjwt==1.7.1
     #   mwoauth
 pymysql==1.0.2
     # via -r requirements.in
-pyopenssl==22.0.0
+pyopenssl==24.0.0
     # via
     #   certipy
     #   josepy
@@ -234,3 +234,4 @@ yarl==1.7.2
 
 # The following packages are considered to be unsafe in a requirements file:
 # setuptools
+setuptools>=70.0.0 # not directly required, pinned by Snyk to avoid a vulnerability
