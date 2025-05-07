@@ -338,5 +338,6 @@ websocket-client==1.8.0
     # via jupyter-server
 
 # The following packages are considered to be unsafe in a requirements file:
-setuptools==78.1.0
+setuptools==78.1.1
     # via jupyterlab
+zipp>=3.19.1 # not directly required, pinned by Snyk to avoid a vulnerability
