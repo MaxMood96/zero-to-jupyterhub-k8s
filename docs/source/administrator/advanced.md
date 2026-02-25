@@ -23,7 +23,7 @@ controller](https://kubernetes.io/docs/concepts/services-networking/ingress-cont
 We used to recommend the [ingress-nginx](https://github.com/kubernetes/ingress-nginx/blob/HEAD/docs/deploy/index.md#using-helm)
 ingress controller if your kubernetes cluster did not come with an Ingress Controller.
 However, that project [has been retired](https://www.kubernetes.dev/blog/2025/11/12/ingress-nginx-retirement/)
-due to lack of maintainership, and there has been no clear successor. Our users havee
+due to lack of maintainership, and there has been no clear successor. Our users have
 had success migrating to the open core [nginx-ingress](https://docs.nginx.com/nginx-ingress-controller/install/helm/parameters/)
 controller as well as the [traefik ingress controller](https://doc.traefik.io/traefik/reference/install-configuration/providers/kubernetes/kubernetes-ingress/). We expect there
 to be more clarity over time as users migrate. See the [announcement](https://www.kubernetes.dev/blog/2025/11/12/ingress-nginx-retirement/)
