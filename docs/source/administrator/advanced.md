@@ -20,9 +20,14 @@ expose JupyterHub using an [Ingress
 controller](https://kubernetes.io/docs/concepts/services-networking/ingress-controllers/).
 
 ```{note}
-Not all k8s clusters are setup with an Ingress controller by default. If you need to
-install one manually, we recommend using
-[ingress-nginx](https://github.com/kubernetes/ingress-nginx/blob/HEAD/docs/deploy/index.md#using-helm).
+We used to recommend the [ingress-nginx](https://github.com/kubernetes/ingress-nginx/blob/HEAD/docs/deploy/index.md#using-helm)
+ingress controller if your kubernetes cluster did not come with an Ingress Controller.
+However, that project [has been retired](https://www.kubernetes.dev/blog/2025/11/12/ingress-nginx-retirement/)
+due to lack of maintainership, and there has been no clear successor. Our users have
+had success migrating to the open core [nginx-ingress](https://docs.nginx.com/nginx-ingress-controller/install/helm/parameters/)
+controller as well as the [traefik ingress controller](https://doc.traefik.io/traefik/reference/install-configuration/providers/kubernetes/kubernetes-ingress/). We expect there
+to be more clarity over time as users migrate. See the [announcement](https://www.kubernetes.dev/blog/2025/11/12/ingress-nginx-retirement/)
+from the kubernetes project for more information.
 ```
 
 The minimal example to expose JupyterHub using an Ingress resource is the following:
