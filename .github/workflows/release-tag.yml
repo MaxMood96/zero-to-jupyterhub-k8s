@@ -28,5 +28,5 @@ jobs:
               repo: context.repo.repo,
               tag_name: tag,
               prerelease: prerelease,
-              body: 'Please see the [changelog](https://zero-to-jupyterhub.readthedocs.io/en/latest/changelog.html) for details.'
+              body: `Please see the [changelog](https://zero-to-jupyterhub.readthedocs.io/en/${tag}/changelog.html) for details.`
             });
