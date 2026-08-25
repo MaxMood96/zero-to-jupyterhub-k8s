@@ -8,7 +8,7 @@
 #
 
 # JupyterHub itself
-jupyterhub==6.0.0b2
+jupyterhub==6.0.0b3
 
 # JupyterHub Spawner, kubernetes specific
 jupyterhub-kubespawner==7.*

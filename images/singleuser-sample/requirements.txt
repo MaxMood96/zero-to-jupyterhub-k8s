@@ -22,7 +22,7 @@ anyio==4.14.2
     #   jupyter-server
 argon2-cffi==25.1.0
     # via jupyter-server
-argon2-cffi-bindings==25.1.0
+argon2-cffi-bindings==26.1.0
     # via argon2-cffi
 arrow==1.4.0
     # via isoduration
@@ -81,7 +81,7 @@ httpcore==1.0.9
     # via httpx
 httpx==0.28.1
     # via jupyterlab
-idna==3.18
+idna==3.19
     # via
     #   anyio
     #   httpx
@@ -153,7 +153,7 @@ jupyter-server==2.20.0
     #   notebook-shim
 jupyter-server-terminals==0.5.4
     # via jupyter-server
-jupyterhub==6.0.0b2
+jupyterhub==6.0.0b3
     # via -r unfrozen/requirements.txt
 jupyterlab==4.6.3
     # via -r unfrozen/requirements.txt
@@ -220,7 +220,7 @@ parso==0.8.7
     # via jedi
 pexpect==4.9.0
     # via ipython
-platformdirs==4.11.3
+platformdirs==4.11.4
     # via jupyter-core
 prometheus-client==0.26.0
     # via
@@ -264,7 +264,7 @@ python-json-logger==4.2.0
     # via jupyter-events
 pyyaml==6.0.3
     # via jupyter-events
-pyzmq==27.1.0
+pyzmq==27.2.0
     # via
     #   ipykernel
     #   jupyter-client
